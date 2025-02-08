@@ -25,10 +25,10 @@ func (s *join) Next(player *database.Player) (consts.StateID, error) {
 	if err != nil {
 		return 0, player.WriteError(err)
 	}
-	if isExit(signal) {
+	if isExitSignal(signal) {
 		return s.Exit(player), nil
 	}
-	if isLs(signal) {
+	if isLsSignal(signal) {
 		return consts.StateJoin, nil
 	}
 	roomId, err := strconv.ParseInt(signal, 10, 64)

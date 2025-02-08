@@ -6,9 +6,7 @@ import (
 	"server/consts"
 	"server/network"
 	"server/protocol"
-	"server/util"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -16,7 +14,7 @@ type Player struct {
 	ID     int64  `json:"id"`
 	IP     string `json:"ip"`
 	Name   string `json:"name"`
-	RoomID int64  `json:"roomId"`
+	RoomID int64  `json:"roomId"` // 所属房间id
 
 	conn   *network.Conn
 	data   chan *protocol.Packet
@@ -43,12 +41,6 @@ func (p *Player) WriteString(data string) error {
 	time.Sleep(30 * time.Millisecond)
 	return p.conn.Write(protocol.Packet{
 		Body: []byte(data),
-	})
-}
-
-func (p *Player) WriteObject(data interface{}) error {
-	return p.conn.Write(protocol.Packet{
-		Body: util.Marshal(data),
 	})
 }
 
@@ -122,22 +114,17 @@ func (p *Player) askForPacket(timeout ...time.Duration) (*protocol.Packet, error
 	return packet, nil
 }
 
-type Room struct {
-	sync.Mutex
-
-	ID             int64     `json:"id"` // 房间id
-	Game           RoomGame  `json:"gameId"`
-	State          int       `json:"state"`      // 房间状态
-	Players        int       `json:"players"`    // 房间人数
-	Creator        int64     `json:"creator"`    // 房间创建者
-	ActiveTime     time.Time `json:"activeTime"` // 房间活跃时间
-	MaxPlayers     int       `json:"maxPlayers"` // 房间最大人数
-	EnableChat     bool      `json:"enableChat"` // 房间是否开启聊天
-	EnableLandlord bool      `json:"enableLandlord"`
-}
-
-type RoomGame interface {
-	Clean()
+func (p *Player) Listening() error {
+	for {
+		pack, err := p.conn.Read()
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		if p.read {
+			p.data <- pack
+		}
+	}
 }
 
 func (p *Player) Offline() {
@@ -153,38 +140,5 @@ func (p *Player) Offline() {
 			leaveRoom(room, p)
 		}
 		roomCancel(room)
-	}
-}
-
-func roomCancel(room *Room) {
-	if room.ActiveTime.Add(24 * time.Hour).Before(time.Now()) {
-		log.Println("room %d is timeout 24 hours, removed.\n", room.ID)
-		deleteRoom(room)
-		return
-	}
-	living := false
-	playerIds := getRoomPlayers(room.ID)
-	for id := range playerIds {
-		if getPlayer(id).online {
-			living = true
-			break
-		}
-	}
-	if !living {
-		log.Println("room %d is not living, removed.\n", room.ID)
-		deleteRoom(room)
-	}
-}
-
-func (p *Player) Listening() error {
-	for {
-		pack, err := p.conn.Read()
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-		if p.read {
-			p.data <- pack
-		}
 	}
 }

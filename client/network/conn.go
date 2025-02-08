@@ -15,6 +15,7 @@ type Conn struct {
 
 func Wrapper(conn protocol.ReadWriteCloser) *Conn {
 	return &Conn{
+		// 给每个连接分配一个id
 		id:   atomic.AddInt64(&connId, 1),
 		conn: conn,
 	}

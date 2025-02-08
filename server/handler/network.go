@@ -34,8 +34,10 @@ func handle(rwc protocol.ReadWriteCloser) error {
 	}
 	player := database.Connected(c, authInfo)
 	log.Printf("player auth accessed, ip %s, %d:%s\n\n", player.IP, authInfo.ID, authInfo.Name)
+	// 开一个线程处理
 	go state.Run(player)
 	defer player.Offline()
+	// 开始监听连接信息,这个连接把包写入player的data里，比如在home里要取一个选择创建房间还是加入房间的askpacket
 	return player.Listening()
 }
 

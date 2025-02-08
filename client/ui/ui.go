@@ -1,32 +1,22 @@
-package main
+package ui
 
 import (
-	"client/shell"
-	"flag"
 	"fmt"
-	"log"
+	"os"
+	"text/template"
 )
 
-var (
-	host string
-	port int
-	name string
-)
-
-func init() {
-	flag.StringVar(&host, "h", "127.0.0.1", "host")
-	flag.IntVar(&port, "p", 9999, "port")
-	flag.StringVar(&name, "n", "", "name")
-	flag.Parse()
+type UI struct {
+	LastCards []string
+	Cards     []string
+	Chat      []string
 }
 
-func main() {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	log.Fatal(shell.New(addr, name).Start())
+func NewUI() *UI {
+	return &UI{}
 }
 
-/*func main() {
-	// 定义要填充的数据
+func (ui *UI) CreateOutput() {
 	data := struct {
 		Cards []string
 		Chat  []string
@@ -56,4 +46,3 @@ func main() {
 		return
 	}
 }
-*/

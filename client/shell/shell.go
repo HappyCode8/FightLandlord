@@ -5,7 +5,6 @@ import (
 	"client/model"
 	"client/util"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -29,18 +28,21 @@ func (s *shell) Start() error {
 		Name: name,
 	})
 	net := "tcp"
-	if strings.HasSuffix(s.addr, "9998") {
+	/*if strings.HasSuffix(s.addr, "9998") {
 		net = "ws"
-	}
+	}*/
+	// 建立一个连接
 	err := s.ctx.Connect(net, s.addr)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
+	// 往连接里边写一个包
 	err = s.ctx.Auth()
 	if err != nil {
 		log.Println(err)
 		return err
 	}
+	// 然后开始监听连接信息
 	return s.ctx.Listener()
 }

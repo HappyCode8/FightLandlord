@@ -17,10 +17,10 @@ type Poker struct {
 
 type Pokers []Poker
 
-// Shuffle 洗牌算法，依次从i位置取出一张与前边i-1张随机取出的一张做交换，第一张的可能性有54，第二张有53，总共的洗法位54!,只有54!的洗牌算法是正确的洗牌算法
-func (pokers Pokers) Shuffle(n int, k int) {
+// Shuffle 洗牌算法，依次从i位置取出一张与前i张随机取出的一张做交换，第一张的可能性有54，第二张有53，总共的洗法位54!,只有54!的洗牌算法是正确的洗牌算法
+func (pokers Pokers) Shuffle(n int) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := n - 1; i > 0; i -= k {
+	for i := n - 1; i > 0; i -= 1 {
 		j := int(r.Int31n(int32(i + 1)))
 		pokers.Swap(i, j)
 	}

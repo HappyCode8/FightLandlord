@@ -1,10 +1,12 @@
 package state
 
 import (
+	"errors"
 	"log"
 	"server/consts"
 	"server/database"
 	"server/util"
+	"slices"
 	"strings"
 )
 
@@ -37,18 +39,15 @@ func Run(player *database.Player) {
 		log.Println("player %s state machine break up.\n", player)
 	}()
 	for {
+		// 获取状态对应的处理对象
 		state := states[player.GetState()]
-		// 以欢迎页为例，输出一段欢迎信息，然后输出homeid
 		stateId, err := state.Next(player)
 		if err != nil {
-			if err1, ok := err.(consts.Error); ok {
+			var err1 consts.Error
+			if errors.As(err, &err1) {
 				if err1.Exit {
 					stateId = state.Exit(player)
 				}
-			} else {
-				log.Println(err)
-				state.Exit(player)
-				break
 			}
 		}
 		if stateId > 0 {
@@ -57,21 +56,16 @@ func Run(player *database.Player) {
 	}
 }
 
-func isExit(signal string) bool {
+func isExitSignal(signal string) bool {
 	signal = strings.ToLower(signal)
-	return isX(signal, "exit", "e")
+	return isXSignal(signal, "exit", "e")
 }
 
-func isLs(signal string) bool {
-	return isX(signal, "ls")
+func isLsSignal(signal string) bool {
+	return isXSignal(signal, "ls")
 }
 
-func isX(signal string, x ...string) bool {
+func isXSignal(signal string, x ...string) bool {
 	signal = strings.ToLower(signal)
-	for _, v := range x {
-		if v == signal {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(x, signal)
 }

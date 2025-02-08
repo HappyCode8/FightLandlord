@@ -5,31 +5,31 @@ import (
 	"server/consts"
 	"server/model"
 	"server/network"
-	"server/util"
 	"sort"
-	"strconv"
 	"sync/atomic"
 	"time"
 )
 
-var roomIds int64 = 0
-var players = make(map[int64]*Player) // 存储连接过服务器的全部用户
-var connPlayers = make(map[int64]*Player)
-var rooms = make(map[int64]*Room)
-var roomPlayers = make(map[int64]map[int64]bool)
+var roomIds int64 = 0                            //房间id
+var players = make(map[int64]*Player)            // <userId,player>
+var connPlayers = make(map[int64]*Player)        //<connId,player>
+var rooms = make(map[int64]*Room)                // <roomId,room>
+var roomPlayers = make(map[int64]map[int64]bool) //<roomId,<playerId, bool>>
 
 func Connected(conn *network.Conn, info *model.AuthInfo) *Player {
 	player := &Player{
+		// 客户端的id是时间戳
 		ID:   info.ID,
-		IP:   conn.IP(),
 		Name: info.Name,
+		IP:   conn.IP(),
 	}
-	player.Conn(conn)               // 初始化play对象
+	player.Conn(conn)               // 初始化player对象
 	players[info.ID] = player       // 写入用户池
 	connPlayers[conn.ID()] = player // 写入连接用户池
 	return player
 }
 
+// GetRooms 获取所有房间，按照id排序
 func GetRooms() []*Room {
 	list := make([]*Room, 0)
 	for _, room := range rooms {
@@ -43,13 +43,11 @@ func GetRooms() []*Room {
 
 func CreateRoom(creator int64) *Room {
 	room := &Room{
-		ID:             atomic.AddInt64(&roomIds, 1),
-		State:          consts.RoomStateWaiting,
-		Creator:        creator,
-		ActiveTime:     time.Now(),
-		MaxPlayers:     consts.MaxPlayers,
-		EnableLandlord: true,
-		EnableChat:     true,
+		ID:         atomic.AddInt64(&roomIds, 1),
+		State:      consts.RoomStateWaiting,
+		Creator:    creator,
+		ActiveTime: time.Now(),
+		MaxPlayers: consts.MaxPlayers,
 	}
 	rooms[room.ID] = room
 	roomPlayers[room.ID] = map[int64]bool{}
@@ -73,12 +71,12 @@ func JoinRoom(roomId, playerId int64) error {
 
 	room.ActiveTime = time.Now()
 
-	// 房间状态检查
+	// 房间状态检查，已经运行的不能加入
 	if room.State == consts.RoomStateRunning {
 		return consts.ErrorsJoinFailForRoomRunning
 	}
 
-	//房间人数检查
+	// 房间人数检查，已经超过2人的不能加入
 	if room.Players >= room.MaxPlayers {
 		return consts.ErrorsRoomPlayersIsFull
 	}
@@ -91,13 +89,6 @@ func JoinRoom(roomId, playerId int64) error {
 	} else {
 		deleteRoom(room)
 		return consts.ErrorsRoomInvalid
-	}
-	return nil
-}
-
-func getPlayer(playerId int64) *Player {
-	if v, ok := players[playerId]; ok {
-		return v
 	}
 	return nil
 }
@@ -186,78 +177,18 @@ func GetPlayer(playerId int64) *Player {
 	return getPlayer(playerId)
 }
 
+func getPlayer(playerId int64) *Player {
+	if v, ok := players[playerId]; ok {
+		return v
+	}
+	return nil
+}
+
 func BroadcastChat(player *Player, msg string, exclude ...int64) {
-	log.Println("chat msg, player %s[%d] %s say: %s\n", player.Name, player.ID, player.IP, msg)
+	log.Printf("chat msg, player %s[%d] %s say: %s\n\n", player.Name, player.ID, player.IP, msg)
 	Broadcast(player.RoomID, msg, exclude...)
 }
 
 func RoomPlayers(roomId int64) map[int64]bool {
 	return getRoomPlayers(roomId)
-}
-
-type Game struct {
-	Room        *Room                  `json:"room"`
-	Players     []int64                `json:"players"`
-	Groups      map[int64]int          `json:"groups"`
-	States      map[int64]chan int     `json:"states"`
-	Pokers      map[int64]model.Pokers `json:"pokers"`
-	Universals  []int                  `json:"universals"`
-	Decks       int                    `json:"decks"`
-	Additional  model.Pokers           `json:"pocket"`
-	Multiple    int                    `json:"multiple"`
-	FirstPlayer int64                  `json:"firstPlayer"`
-	LastPlayer  int64                  `json:"lastPlayer"`
-	Robs        []int64                `json:"robs"`
-	FirstRob    int64                  `json:"firstRob"`
-	LastRob     int64                  `json:"lastRob"`
-	FinalRob    bool                   `json:"finalRob"`
-	LastPokers  model.Pokers           `json:"lastPokers"`
-	Mnemonic    map[int]int            `json:"mnemonic"`
-	//Skills      map[int64]int           `json:"skills"`
-	PlayTimes   map[int64]int           `json:"playTimes"`
-	PlayTimeOut map[int64]time.Duration `json:"playTimeOut"`
-	//Rules       poker.Rules             `json:"rules"`
-	Discards model.Pokers `json:"discards"` // 废弃的牌
-}
-
-func (game *Game) Clean() {
-	if game != nil {
-		for _, state := range game.States {
-			close(state)
-		}
-	}
-}
-
-func (game *Game) Start() {
-
-}
-
-func (g Game) NextPlayer(curr int64) int64 {
-	idx := util.IndexOf(g.Players, curr)
-	return g.Players[(idx+1)%len(g.Players)]
-}
-
-func (g Game) PrevPlayer(curr int64) int64 {
-	idx := util.IndexOf(g.Players, curr)
-	return g.Players[(idx+len(g.Players))%len(g.Players)]
-}
-
-func (g Game) IsTeammate(player1, player2 int64) bool {
-	return g.Groups[player1] == g.Groups[player2]
-}
-
-func (g Game) IsLandlord(playerId int64) bool {
-	return g.Groups[playerId] == 1
-}
-
-func (g Game) Team(playerId int64) string {
-	if !g.Room.EnableLandlord {
-		return "team" + strconv.Itoa(g.Groups[playerId])
-	} else {
-		if !g.IsLandlord(playerId) {
-			return "peasant"
-		} else {
-			return "landlord"
-		}
-	}
 }

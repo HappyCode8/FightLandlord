@@ -2,9 +2,11 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"server/consts"
 	"server/database"
+	"server/util"
 	"strings"
 	"time"
 )
@@ -47,7 +49,7 @@ func waitingForStart(player *database.Player, room *database.Room) (bool, error)
 	defer player.StopTransaction()
 	for {
 		signal, err := player.AskForStringWithoutTransaction(time.Second)
-		if err != nil && err != consts.ErrorsTimeout {
+		if err != nil && !errors.Is(err, consts.ErrorsTimeout) {
 			return access, err
 		}
 		if room.State == consts.RoomStateRunning {
@@ -58,7 +60,7 @@ func waitingForStart(player *database.Player, room *database.Room) (bool, error)
 		// ls指令时列出当前的人员,start开始游戏，其余指令视为聊天广播
 		if signal == "ls" {
 			viewRoomPlayers(room, player)
-		} else if signal == "start" && room.Creator == player.ID && room.Players > 1 {
+		} else if signal == "start" && room.Creator == player.ID && room.Players == 3 {
 			err = startGame(player, room)
 			if err != nil {
 				return access, err
@@ -89,12 +91,8 @@ func viewRoomPlayers(room *database.Room, currPlayer *database.Player) {
 	buf.WriteString(fmt.Sprintf("Room ID: %d\n", room.ID))
 	buf.WriteString(fmt.Sprintf("%-20s%-10s\n", "Name", "Title"))
 	for playerId := range database.RoomPlayers(room.ID) {
-		title := "player"
-		if playerId == room.Creator {
-			title = "owner"
-		}
 		player := database.GetPlayer(playerId)
-		buf.WriteString(fmt.Sprintf("%-20s%-10s\n", player.Name, title))
+		buf.WriteString(fmt.Sprintf("%-20s%-10s\n", player.Name, util.ChooseIf(playerId == room.Creator, "owner", "player")))
 	}
 	_ = currPlayer.WriteString(buf.String())
 }

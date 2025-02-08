@@ -28,6 +28,13 @@ const (
 	PlayTimeout = 40 * time.Second
 )
 
+var (
+	RoomStates = map[int]string{
+		RoomStateWaiting: "Waiting",
+		RoomStateRunning: "Running",
+	}
+)
+
 // todo: Exit的作用？
 type Error struct {
 	Code int
@@ -57,23 +64,4 @@ var (
 
 	ErrorsPokersFacesInvalid = NewErr(1, false, "Pokers faces invalid. ")
 	ErrorsHaveToPlay         = NewErr(1, false, "Have to play. ")
-	RoomStates               = map[int]string{
-		RoomStateWaiting: "Waiting",
-		RoomStateRunning: "Running",
-	}
-)
-
-type FacesType int
-
-const (
-	_                   FacesType = iota
-	FacesBomb                     = 1 //炸弹
-	FacesSingle                   = 2 //单牌
-	FacesDouble                   = 3 //对子
-	FacesTriple                   = 4 //三张
-	FacesUnion3                   = 5 //三带一
-	FacesUnion4                   = 6 //四带二
-	FacesStraight                 = 7 //顺子 or 连对
-	FacesUnion3Straight           = 8 //飞机
-	FacesInvalid                  = 9
 )

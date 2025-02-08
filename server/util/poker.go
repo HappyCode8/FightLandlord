@@ -2,12 +2,17 @@ package util
 
 import (
 	"server/model"
+	"strconv"
 )
 
 var (
-	base      = make(model.Pokers, 0)
-	desc      = map[int]string{}
+	// 存储所有的牌，1-13存花色，14，15存大小王
+	base = make(model.Pokers, 0)
+	// 存每一张牌对应的名字，1是A，11,12,13是JQK，14,15是SX，其余是数字
+	desc = map[int]string{}
+	// 每张牌对应的别名
 	keysAlias = map[int][]string{}
+	// 每张别名对应的牌，出牌时使用这个结构找到真正的牌
 	aliasKeys = map[string]int{}
 )
 
@@ -36,8 +41,8 @@ func init() {
 			desc[k] = "X"
 			keysAlias[k] = []string{"x", "X"}
 		default:
-			desc[k] = String(k)
-			keysAlias[k] = []string{String(k)}
+			desc[k] = strconv.Itoa(k)
+			keysAlias[k] = []string{strconv.Itoa(k)}
 		}
 	}
 	//每一个别名都能对应到相应的数字上
@@ -51,37 +56,21 @@ func init() {
 		for t := 0; t < 4; t++ {
 			base = append(base, model.Poker{
 				Key:  k,
-				Val:  0,
 				Desc: desc[k],
 				Suit: model.PokerSuit(t),
 			})
 		}
 	}
+	// 加上大小王
 	for k := 14; k <= 15; k++ {
 		base = append(base, model.Poker{
 			Key:  k,
-			Val:  0,
 			Desc: desc[k],
 		})
 	}
 }
 
-func GetKey(alias string) int {
-	return aliasKeys[alias]
-}
-
-func GetAlias(key int) string {
-	if len(keysAlias[key]) > 0 {
-		return keysAlias[key][0]
-	}
-	return ""
-}
-
-func GetDesc(key int) string {
-	return desc[key]
-}
-
-// Distribute number is players number. n is shuffle times.
+// Distribute 洗牌，洗成[[17张],[17张],[17张],[3张]]的结果
 func Distribute(number int) []model.Pokers {
 	pokers := make(model.Pokers, 0)
 	//没洗过的牌，没有权重
@@ -92,7 +81,7 @@ func Distribute(number int) []model.Pokers {
 	}
 	size := len(pokers)
 	// 洗牌
-	pokers.Shuffle(size, 1)
+	pokers.Shuffle(size)
 	avgNum := 17
 	pokersArr := make([]model.Pokers, 0)
 	for i := 0; i < number; i++ {
@@ -107,20 +96,22 @@ func Distribute(number int) []model.Pokers {
 	for i := range pokersArr {
 		pokersArr[i].SortByValue()
 	}
-	for i := range pokersArr {
-		pokersArr[i].SortByValue()
-	}
 	return pokersArr
 }
 
-// Value 对牌型大小计分，大小关系是 大小王21345678910JQK对应的计分分别是15 14 13 12 3 4 5 6 7 8 9 10 11 12 13
+// GetKey 根据出的牌找到真正的牌的key
+func GetKey(alias string) int {
+	return aliasKeys[alias]
+}
+
+// GetValueByKey Value对牌型大小计分，大小关系是345678910JQKA2SX，对应的计分分别是3 4 5 6 7 8 9 10 11 12 13 14 15
 func GetValueByKey(key int) int {
 	if key == 1 {
-		return 12
+		return 12 // A
 	} else if key == 2 {
-		return 13
+		return 13 // 2
 	} else if key > 13 {
-		return key
+		return key // 大小王
 	}
-	return key - 2
+	return key - 2 //其余牌
 }

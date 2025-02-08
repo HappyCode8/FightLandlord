@@ -2,10 +2,10 @@ package protocol
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"server/consts"
-	"server/util"
 	"strconv"
 )
 
@@ -32,7 +32,12 @@ func (p Packet) String() string {
 }
 
 func (p Packet) Unmarshal(v interface{}) error {
-	return util.Unmarshal(p.Body, v)
+	//return util.Unmarshal(p.Body, v)
+	err := json.Unmarshal(p.Body, v)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func StringPacket(msg string) Packet {
@@ -44,12 +49,6 @@ func StringPacket(msg string) Packet {
 func ErrorPacket(err error) Packet {
 	return Packet{
 		Body: []byte(err.Error()),
-	}
-}
-
-func ObjectPacket(obj interface{}) Packet {
-	return Packet{
-		Body: util.Marshal(obj),
 	}
 }
 
