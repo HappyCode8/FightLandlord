@@ -1,4 +1,4 @@
-package state
+package service
 
 import (
 	"bytes"
@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"server/consts"
 	"server/database"
+	"server/errdef"
 	"server/model"
-	"server/util"
 	"strings"
 	"time"
 )
@@ -22,7 +22,7 @@ var (
 
 func InitGame(room *database.Room) (*database.Game, error) {
 	// 得到牌的分发
-	distributes := util.Distribute(room.Players)
+	distributes := model.Distribute(room.Players)
 	players := make([]int64, 0)
 	roomPlayers := database.RoomPlayers(room.ID)
 	for playerId := range roomPlayers {
@@ -51,7 +51,7 @@ func InitGame(room *database.Room) (*database.Game, error) {
 func (g *Game) Next(player *database.Player) (consts.StateID, error) {
 	room := database.GetRoom(player.RoomID)
 	if room == nil {
-		return 0, player.WriteError(consts.ErrorsExist)
+		return 0, player.WriteError(errdef.ErrorsExist)
 	}
 	game := room.Game
 	buf := bytes.Buffer{}
@@ -76,7 +76,7 @@ func (g *Game) Next(player *database.Player) (consts.StateID, error) {
 		case stateWaiting:
 			return consts.StateWaiting, nil
 		default:
-			return 0, consts.ErrorsChanClosed
+			return 0, errdef.ErrorsChanClosed
 		}
 	}
 }
@@ -107,7 +107,7 @@ func playing(player *database.Player, game *database.Game) error {
 		}
 		ans = strings.ToLower(ans)
 		if ans == "" {
-			_ = player.WriteString(fmt.Sprintf("%s\n", consts.ErrorsPokersFacesInvalid.Error()))
+			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
 			continue
 		} else if ans == "pass" {
 			nextPlayer := database.GetPlayer(game.NextPlayer(player.ID))
@@ -121,7 +121,7 @@ func playing(player *database.Player, game *database.Game) error {
 		}
 		sells := make(model.Pokers, 0) // 要出的
 		for _, alias := range ans {
-			key := util.GetKey(string(alias))
+			key := model.GetKey(string(alias))
 			sells = append(sells, normalPokers[key][len(normalPokers[key])-1]) // 出的牌，从normalPokers取最后一张
 			normalPokers[key] = normalPokers[key][:len(normalPokers[key])-1]   // 剩的牌，从normalPokers取前几张
 		}

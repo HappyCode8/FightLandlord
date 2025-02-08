@@ -8,6 +8,24 @@ import (
 	"time"
 )
 
+type PokerSuit int
+
+const (
+	Spade   PokerSuit = iota // 黑桃
+	Heart                    // 红桃
+	Club                     // 梅花
+	Diamond                  // 方片
+)
+
+func (s PokerSuit) String() string {
+	return map[PokerSuit]string{
+		Spade:   "♠",
+		Heart:   "♥",
+		Club:    "♣",
+		Diamond: "♦",
+	}[s]
+}
+
 type Poker struct {
 	Key  int       `json:"key"`  // 牌的数字 1-13，14小王，15大王
 	Val  int       `json:"val"`  // 牌的大小权重

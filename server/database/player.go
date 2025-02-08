@@ -1,10 +1,11 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"server/consts"
-	"server/network"
+	"server/errdef"
 	"server/protocol"
 	"strings"
 	"time"
@@ -16,14 +17,14 @@ type Player struct {
 	Name   string `json:"name"`
 	RoomID int64  `json:"roomId"` // 所属房间id
 
-	conn   *network.Conn
-	data   chan *protocol.Packet
-	read   bool
-	state  consts.StateID
-	online bool
+	conn   *protocol.Conn        // 所属连接
+	data   chan *protocol.Packet // 包内容
+	read   bool                  // 是否处于可读状态
+	state  consts.StateID        // 所处的状态
+	online bool                  // 是否在线
 }
 
-func (p *Player) Conn(conn *network.Conn) {
+func (p *Player) Conn(conn *protocol.Conn) {
 	p.conn = conn
 	p.data = make(chan *protocol.Packet, 8)
 	p.online = true
@@ -45,7 +46,7 @@ func (p *Player) WriteString(data string) error {
 }
 
 func (p *Player) WriteError(err error) error {
-	if err == consts.ErrorsExist {
+	if errors.Is(err, errdef.ErrorsExist) {
 		return err
 	}
 	return p.conn.Write(protocol.Packet{
@@ -99,17 +100,17 @@ func (p *Player) askForPacket(timeout ...time.Duration) (*protocol.Packet, error
 		select {
 		case packet = <-p.data:
 		case <-time.After(timeout[0]):
-			return nil, consts.ErrorsTimeout
+			return nil, errdef.ErrorsTimeout
 		}
 	} else {
 		packet = <-p.data
 	}
 	if packet == nil {
-		return nil, consts.ErrorsChanClosed
+		return nil, errdef.ErrorsChanClosed
 	}
 	single := strings.ToLower(packet.String())
 	if single == "exit" || single == "e" {
-		return nil, consts.ErrorsExist
+		return nil, errdef.ErrorsExist
 	}
 	return packet, nil
 }

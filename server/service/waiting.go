@@ -1,4 +1,4 @@
-package state
+package service
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"server/consts"
 	"server/database"
+	"server/errdef"
 	"server/util"
 	"strings"
 	"time"
@@ -16,7 +17,7 @@ type waiting struct{}
 func (s *waiting) Next(player *database.Player) (consts.StateID, error) {
 	room := database.GetRoom(player.RoomID)
 	if room == nil {
-		return 0, consts.ErrorsExist
+		return 0, errdef.ErrorsExist
 	}
 	access, err := waitingForStart(player, room)
 	if err != nil {
@@ -49,7 +50,7 @@ func waitingForStart(player *database.Player, room *database.Room) (bool, error)
 	defer player.StopTransaction()
 	for {
 		signal, err := player.AskForStringWithoutTransaction(time.Second)
-		if err != nil && !errors.Is(err, consts.ErrorsTimeout) {
+		if err != nil && !errors.Is(err, errdef.ErrorsTimeout) {
 			return access, err
 		}
 		if room.State == consts.RoomStateRunning {

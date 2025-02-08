@@ -2,24 +2,51 @@ package handler
 
 import (
 	"log"
-	"server/consts"
+	"net"
 	"server/database"
+	"server/errdef"
 	"server/model"
-	"server/network"
 	"server/protocol"
-	"server/state"
+	"server/service"
 	"server/util"
 	"time"
 )
 
-// Network is interface of all kinds of network.
-type Network interface {
-	Serve() error
+type Tcp struct {
+	addr string
 }
 
-func handle(rwc protocol.ReadWriteCloser) error {
+func NewTcpServer(addr string) Tcp {
+	return Tcp{addr: addr}
+}
+
+func (t Tcp) Serve() error {
+	listener, err := net.Listen("tcp", t.addr)
+	if err != nil {
+		return err
+	}
+	log.Println("tcp server listening on", t.addr)
+	for {
+		// 监听连接
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			log.Println("listener.Accept err", err)
+			continue
+		}
+		// 每有一个连接，就处理
+		util.Async(func() {
+			handleErr := handle(conn)
+			if handleErr != nil {
+				log.Println("handle err", handleErr)
+			}
+		})
+	}
+}
+
+// func handle(rwc protocol.ReadWriteCloser) error {
+func handle(conn net.Conn) error {
 	// 给新进入的用户分配资源，一个id对应一个conn
-	c := network.Wrapper(rwc)
+	c := protocol.Wrapper(conn)
 	defer func() {
 		err := c.Close()
 		if err != nil {
@@ -35,14 +62,14 @@ func handle(rwc protocol.ReadWriteCloser) error {
 	player := database.Connected(c, authInfo)
 	log.Printf("player auth accessed, ip %s, %d:%s\n\n", player.IP, authInfo.ID, authInfo.Name)
 	// 开一个线程处理
-	go state.Run(player)
+	go service.Run(player)
 	defer player.Offline()
 	// 开始监听连接信息,这个连接把包写入player的data里，比如在home里要取一个选择创建房间还是加入房间的askpacket
 	return player.Listening()
 }
 
 // 登陆验签
-func loginAuth(c *network.Conn) (*model.AuthInfo, error) {
+func loginAuth(c *protocol.Conn) (*model.AuthInfo, error) {
 	authChan := make(chan *model.AuthInfo)
 	defer close(authChan)
 	util.Async(func() {
@@ -64,6 +91,6 @@ func loginAuth(c *network.Conn) (*model.AuthInfo, error) {
 		return authInfo, nil
 	// 最多等待3s
 	case <-time.After(3 * time.Second):
-		return nil, consts.ErrorsAuthFail
+		return nil, errdef.ErrorsAuthFail
 	}
 }

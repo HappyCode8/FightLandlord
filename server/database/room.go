@@ -11,7 +11,7 @@ type Room struct {
 
 	ID         int64     `json:"id"`         // 房间id
 	Game       *Game     `json:"gameId"`     // 房间持有的游戏
-	State      int       `json:"state"`      // 房间状态
+	State      int       `json:"service"`    // 房间状态
 	Players    int       `json:"players"`    // 房间人数
 	Creator    int64     `json:"creator"`    // 房间创建者
 	ActiveTime time.Time `json:"activeTime"` // 房间活跃时间

@@ -1,17 +1,16 @@
-package state
+package service
 
 import (
-	"bytes"
 	"server/consts"
 	"server/database"
+	"server/errdef"
 )
 
 type home struct{}
 
 func (*home) Next(player *database.Player) (consts.StateID, error) {
-	buf := bytes.Buffer{}
-	buf.WriteString("1.Join\n2.New\n")
-	err := player.WriteString(buf.String())
+	chooseStr := "1.Join\n2.New\n"
+	err := player.WriteString(chooseStr)
 	if err != nil {
 		return 0, player.WriteError(err)
 	}
@@ -19,12 +18,13 @@ func (*home) Next(player *database.Player) (consts.StateID, error) {
 	if err != nil {
 		return 0, player.WriteError(err)
 	}
-	if selected == 1 {
+	switch selected {
+	case 1:
 		return consts.StateJoin, nil
-	} else if selected == 2 {
+	case 2:
 		return consts.StateCreate, nil
 	}
-	return 0, player.WriteError(consts.ErrorsInputInvalid)
+	return 0, player.WriteError(errdef.ErrorsInputInvalid)
 }
 
 func (*home) Exit(player *database.Player) consts.StateID {

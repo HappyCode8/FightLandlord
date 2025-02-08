@@ -1,22 +1,23 @@
-package util
+package model
 
 import (
-	"server/model"
 	"strconv"
+	"sync"
 )
 
 var (
-	// 存储所有的牌，1-13存花色，14，15存大小王
-	base = make(model.Pokers, 0)
-	// 存每一张牌对应的名字，1是A，11,12,13是JQK，14,15是SX，其余是数字
-	desc = map[int]string{}
-	// 每张牌对应的别名
-	keysAlias = map[int][]string{}
-	// 每张别名对应的牌，出牌时使用这个结构找到真正的牌
-	aliasKeys = map[string]int{}
+	base      = make(Pokers, 0)    // 存储所有的牌，1-13存花色，14，15存大小王
+	desc      = map[int]string{}   // 存每一张牌对应的名字，1是A，11,12,13是JQK，14,15是SX，其余是数字
+	keysAlias = map[int][]string{} // 每张牌对应的别名
+	aliasKeys = map[string]int{}   // 每张别名对应的牌，出牌时使用这个结构找到真正的牌
+	once      sync.Once
 )
 
-func init() {
+func InitPackPoker() {
+	once.Do(createPackNewPokers)
+}
+
+func createPackNewPokers() {
 	for k := 1; k <= 15; k++ {
 		switch k {
 		case 1:
@@ -54,16 +55,16 @@ func init() {
 	// 加上花色
 	for k := 1; k <= 13; k++ {
 		for t := 0; t < 4; t++ {
-			base = append(base, model.Poker{
+			base = append(base, Poker{
 				Key:  k,
 				Desc: desc[k],
-				Suit: model.PokerSuit(t),
+				Suit: PokerSuit(t),
 			})
 		}
 	}
 	// 加上大小王
 	for k := 14; k <= 15; k++ {
-		base = append(base, model.Poker{
+		base = append(base, Poker{
 			Key:  k,
 			Desc: desc[k],
 		})
@@ -71,8 +72,8 @@ func init() {
 }
 
 // Distribute 洗牌，洗成[[17张],[17张],[17张],[3张]]的结果
-func Distribute(number int) []model.Pokers {
-	pokers := make(model.Pokers, 0)
+func Distribute(number int) []Pokers {
+	pokers := make(Pokers, 0)
 	//没洗过的牌，没有权重
 	pokers = append(pokers, base...)
 	// 给牌值加上权重
@@ -83,14 +84,14 @@ func Distribute(number int) []model.Pokers {
 	// 洗牌
 	pokers.Shuffle(size)
 	avgNum := 17
-	pokersArr := make([]model.Pokers, 0)
+	pokersArr := make([]Pokers, 0)
 	for i := 0; i < number; i++ {
 		// 每个人的牌数
-		pokerArr := make([]model.Poker, 0)
+		pokerArr := make([]Poker, 0)
 		pokersArr = append(pokersArr, append(pokerArr, pokers[i*avgNum:(i+1)*avgNum]...))
 	}
 
-	pokerArr := make([]model.Poker, 0)
+	pokerArr := make([]Poker, 0)
 	pokersArr = append(pokersArr, append(pokerArr, pokers[size-3:]...))
 
 	for i := range pokersArr {

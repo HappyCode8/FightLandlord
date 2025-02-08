@@ -1,10 +1,11 @@
-package state
+package service
 
 import (
 	"errors"
 	"log"
 	"server/consts"
 	"server/database"
+	"server/errdef"
 	"server/util"
 	"slices"
 	"strings"
@@ -36,14 +37,14 @@ func Run(player *database.Player) {
 		if err := recover(); err != nil {
 			util.PrintStackTrace(err)
 		}
-		log.Println("player %s state machine break up.\n", player)
+		log.Println("player %s service machine break up.\n", player)
 	}()
 	for {
 		// 获取状态对应的处理对象
 		state := states[player.GetState()]
 		stateId, err := state.Next(player)
 		if err != nil {
-			var err1 consts.Error
+			var err1 errdef.Error
 			if errors.As(err, &err1) {
 				if err1.Exit {
 					stateId = state.Exit(player)

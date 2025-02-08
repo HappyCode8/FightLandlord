@@ -1,10 +1,11 @@
-package state
+package service
 
 import (
 	"bytes"
 	"fmt"
 	"server/consts"
 	"server/database"
+	"server/errdef"
 	"strconv"
 )
 
@@ -33,11 +34,11 @@ func (s *join) Next(player *database.Player) (consts.StateID, error) {
 	}
 	roomId, err := strconv.ParseInt(signal, 10, 64)
 	if err != nil {
-		return 0, player.WriteError(consts.ErrorsRoomInvalid)
+		return 0, player.WriteError(errdef.ErrorsRoomInvalid)
 	}
 	room := database.GetRoom(roomId)
 	if room == nil {
-		return 0, player.WriteError(consts.ErrorsRoomInvalid)
+		return 0, player.WriteError(errdef.ErrorsRoomInvalid)
 	}
 
 	err = database.JoinRoom(roomId, player.ID)

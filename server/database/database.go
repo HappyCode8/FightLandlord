@@ -3,8 +3,9 @@ package database
 import (
 	"log"
 	"server/consts"
+	"server/errdef"
 	"server/model"
-	"server/network"
+	"server/protocol"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -12,20 +13,18 @@ import (
 
 var roomIds int64 = 0                            //房间id
 var players = make(map[int64]*Player)            // <userId,player>
-var connPlayers = make(map[int64]*Player)        //<connId,player>
 var rooms = make(map[int64]*Room)                // <roomId,room>
 var roomPlayers = make(map[int64]map[int64]bool) //<roomId,<playerId, bool>>
 
-func Connected(conn *network.Conn, info *model.AuthInfo) *Player {
+func Connected(conn *protocol.Conn, info *model.AuthInfo) *Player {
 	player := &Player{
 		// 客户端的id是时间戳
 		ID:   info.ID,
 		Name: info.Name,
 		IP:   conn.IP(),
 	}
-	player.Conn(conn)               // 初始化player对象
-	players[info.ID] = player       // 写入用户池
-	connPlayers[conn.ID()] = player // 写入连接用户池
+	player.Conn(conn)         // 初始化player对象
+	players[info.ID] = player // 写入用户池
 	return player
 }
 
@@ -58,11 +57,11 @@ func JoinRoom(roomId, playerId int64) error {
 	// 资源检查
 	player := getPlayer(playerId)
 	if player == nil {
-		return consts.ErrorsExist
+		return errdef.ErrorsExist
 	}
 	room := getRoom(roomId)
 	if room == nil {
-		return consts.ErrorsRoomInvalid
+		return errdef.ErrorsRoomInvalid
 	}
 
 	// 加锁防止并发异常
@@ -73,12 +72,12 @@ func JoinRoom(roomId, playerId int64) error {
 
 	// 房间状态检查，已经运行的不能加入
 	if room.State == consts.RoomStateRunning {
-		return consts.ErrorsJoinFailForRoomRunning
+		return errdef.ErrorsJoinFailForRoomRunning
 	}
 
 	// 房间人数检查，已经超过2人的不能加入
 	if room.Players >= room.MaxPlayers {
-		return consts.ErrorsRoomPlayersIsFull
+		return errdef.ErrorsRoomPlayersIsFull
 	}
 
 	playersIds := getRoomPlayers(roomId)
@@ -88,7 +87,7 @@ func JoinRoom(roomId, playerId int64) error {
 		player.RoomID = roomId
 	} else {
 		deleteRoom(room)
-		return consts.ErrorsRoomInvalid
+		return errdef.ErrorsRoomInvalid
 	}
 	return nil
 }
@@ -121,12 +120,9 @@ func deleteRoom(room *Room) {
 	}
 }
 
-func broadcast(room *Room, msg string, exclude ...int64) {
+func broadcast(room *Room, msg string) {
 	room.ActiveTime = time.Now()
 	excludeSet := map[int64]bool{}
-	for _, exc := range exclude {
-		excludeSet[exc] = true
-	}
 	for playerId := range getRoomPlayers(room.ID) {
 		if player := getPlayer(playerId); player != nil && !excludeSet[playerId] {
 			_ = player.WriteString(">> " + msg)
@@ -134,12 +130,12 @@ func broadcast(room *Room, msg string, exclude ...int64) {
 	}
 }
 
-func Broadcast(roomId int64, msg string, exclude ...int64) {
+func Broadcast(roomId int64, msg string) {
 	room := getRoom(roomId)
 	if room == nil {
 		return
 	}
-	broadcast(room, msg, exclude...)
+	broadcast(room, msg)
 }
 
 func LeaveRoom(roomId, playerId int64) {
@@ -184,9 +180,9 @@ func getPlayer(playerId int64) *Player {
 	return nil
 }
 
-func BroadcastChat(player *Player, msg string, exclude ...int64) {
+func BroadcastChat(player *Player, msg string) {
 	log.Printf("chat msg, player %s[%d] %s say: %s\n\n", player.Name, player.ID, player.IP, msg)
-	Broadcast(player.RoomID, msg, exclude...)
+	Broadcast(player.RoomID, msg)
 }
 
 func RoomPlayers(roomId int64) map[int64]bool {

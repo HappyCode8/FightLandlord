@@ -1,9 +1,7 @@
-package ctx
+package model
 
 import (
 	"client/const"
-	"client/model"
-	"client/network"
 	"client/protocol"
 	"client/util"
 	"errors"
@@ -21,37 +19,31 @@ type Context struct {
 	id   int64
 	name string
 
-	conn *network.Conn
+	conn *protocol.Conn
 }
 
-type netConnector func(addr string) (*network.Conn, error)
-
-var netConnectors = map[string]netConnector{
-	"tcp": tcpConnect,
-	/*"ws":  websocketConnect,*/
-}
-
-func New(user model.LoginRespData) *Context {
+func NewContext(userId int64, userName string) *Context {
 	return &Context{
-		id:   user.ID,
-		name: user.Name,
+		id:   userId,
+		name: userName,
 	}
 }
 
-func (c *Context) Connect(net string, addr string) error {
-	if connector, ok := netConnectors[net]; ok {
-		conn, err := connector(addr)
-		if err != nil {
-			return err
-		}
-		c.conn = conn
-		return nil
+func (c *Context) Connect(addr string) error {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return errors.New(fmt.Sprintf("tcp server error: %v", err))
 	}
-	return errors.New(fmt.Sprintf("unsupported net type: %s", net))
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return errors.New(fmt.Sprintf("tcp server error: %v", err))
+	}
+	c.conn = protocol.Wrapper(conn)
+	return nil
 }
 
 func (c *Context) Auth() error {
-	return c.conn.Write(protocol.ObjectPacket(model.AuthInfo{
+	return c.conn.Write(protocol.ObjectPacket(AuthInfo{
 		ID:   c.id,
 		Name: c.name,
 	}))
@@ -81,7 +73,7 @@ func (c *Context) Listener() error {
 		}
 	})
 	// 这个的作用是接收服务器的信息，
-	return c.conn.Accept(func(packet protocol.Packet, conn *network.Conn) {
+	return c.conn.Accept(func(packet protocol.Packet, conn *protocol.Conn) {
 		data := string(packet.Body)
 		if data == consts.IsStart {
 			//log.Println("debug接收: 接收到了服务器的开始信息")
@@ -114,26 +106,3 @@ func (c *Context) print(str string) {
 	defer c.Unlock()
 	fmt.Print(str)
 }
-
-// 传入一个地址，返回一个连接
-func tcpConnect(addr string) (*network.Conn, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("tcp server error: %v", err))
-	}
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("tcp server error: %v", err))
-	}
-	return network.Wrapper(protocol.NewTcpReadWriteCloser(conn)), nil
-}
-
-/*func websocketConnect(addr string) (*network.Conn, error) {
-	u := url.URL{Scheme: "ws", Host: addr, Path: "/ws"}
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("ws server error: %v", err))
-	}
-	return network.Wrapper(protocol.NewWebsocketReadWriteCloser(conn)), nil
-}
-*/

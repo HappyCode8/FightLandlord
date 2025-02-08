@@ -1,7 +1,6 @@
 package shell
 
 import (
-	"client/ctx"
 	"client/model"
 	"client/util"
 	"log"
@@ -9,7 +8,7 @@ import (
 )
 
 type shell struct {
-	ctx  *ctx.Context
+	ctx  *model.Context
 	addr string
 	name string
 }
@@ -23,16 +22,12 @@ func New(addr, name string) *shell {
 
 func (s *shell) Start() error {
 	name := util.RandomName()
-	s.ctx = ctx.New(model.LoginRespData{
-		ID:   time.Now().UnixNano(),
-		Name: name,
-	})
-	net := "tcp"
-	/*if strings.HasSuffix(s.addr, "9998") {
-		net = "ws"
-	}*/
+	s.ctx = model.NewContext(
+		time.Now().UnixNano(),
+		name,
+	)
 	// 建立一个连接
-	err := s.ctx.Connect(net, s.addr)
+	err := s.ctx.Connect(s.addr)
 	if err != nil {
 		log.Println(err)
 		return err

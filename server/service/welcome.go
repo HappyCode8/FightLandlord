@@ -1,7 +1,6 @@
-package state
+package service
 
 import (
-	"bytes"
 	"fmt"
 	"server/consts"
 	"server/database"
@@ -10,9 +9,8 @@ import (
 type welcome struct{}
 
 func (*welcome) Next(player *database.Player) (consts.StateID, error) {
-	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("Hi %s, Welcome to ratel online!\n", player.Name))
-	err := player.WriteString(buf.String())
+	welcomeStr := fmt.Sprintf("Hi %s, Welcome to ratel online!\n", player.Name)
+	err := player.WriteString(welcomeStr)
 	if err != nil {
 		return 0, player.WriteError(err)
 	}
