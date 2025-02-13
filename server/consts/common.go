@@ -1,7 +1,5 @@
 package consts
 
-import "time"
-
 const (
 	MaxPacketSize = 65536
 	MaxPlayers    = 3
@@ -11,20 +9,6 @@ const (
 
 	RoomStateWaiting = 1
 	RoomStateRunning = 2
-)
-
-type StateID int
-
-const (
-	_ StateID = iota
-	StateWelcome
-	StateHome
-	StateJoin
-	StateCreate
-	StateWaiting
-	StateGame
-
-	PlayTimeout = 40 * time.Second
 )
 
 var (

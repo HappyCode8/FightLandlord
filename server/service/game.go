@@ -115,17 +115,22 @@ func playing(player *database.Player, game *database.Game) error {
 			game.States[nextPlayer.ID] <- statePlay
 			return nil
 		}
-		normalPokers := map[int]model.Pokers{} //<3,333 5,555>样式
+		normalPokers := map[int]model.Pokers{} //<3,33 5,555>样式
 		for _, v := range pokers {
 			normalPokers[v.Key] = append(normalPokers[v.Key], v)
 		}
+		// todo: 1. 需要判断出的牌是否符合规则 2. 需要判断出的牌是否比上家的大
 		sells := make(model.Pokers, 0) // 要出的
 		for _, alias := range ans {
 			key := model.GetKey(string(alias))
 			sells = append(sells, normalPokers[key][len(normalPokers[key])-1]) // 出的牌，从normalPokers取最后一张
 			normalPokers[key] = normalPokers[key][:len(normalPokers[key])-1]   // 剩的牌，从normalPokers取前几张
 		}
-		// 把剩下的牌重新分给用户
+		if model.ParseFaces(sells).Type == consts.Invalid {
+			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
+			continue
+		}
+		// 刷新剩下的牌
 		pokers = make(model.Pokers, 0)
 		for _, curr := range normalPokers {
 			pokers = append(pokers, curr...)
