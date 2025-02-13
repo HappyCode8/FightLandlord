@@ -10,10 +10,8 @@ import (
 type Faces struct {
 	Keys   []int            `json:"keys"`
 	Values []int            `json:"values"`
-	Score  int64            `json:"score"`
+	Score  int              `json:"score"`
 	Type   consts.FacesType `json:"type"`
-	Main   int              `json:"main"`
-	Extra  int              `json:"extra"`
 }
 
 func (f *Faces) SetValues(values []int) *Faces {
@@ -26,17 +24,7 @@ func (f *Faces) SetKeys(keys []int) *Faces {
 	return f
 }
 
-func (f *Faces) SetMain(main int) *Faces {
-	f.Main = main
-	return f
-}
-
-func (f *Faces) SetExtra(extra int) *Faces {
-	f.Extra = extra
-	return f
-}
-
-func (f *Faces) SetScore(score int64) *Faces {
+func (f *Faces) SetScore(score int) *Faces {
 	f.Score = score
 	return f
 }
@@ -54,34 +42,51 @@ func (f *Faces) String() string {
 	return buf.String()
 }
 
-func (f *Faces) Compare(lastFaces Faces) bool {
-	if f.Type == consts.Bomb {
-		return f.Score > lastFaces.Score
+func (f *Faces) MaxThan(lastFaces *Faces) bool {
+	if f.Type == consts.KingBomb {
+		return true
+	}
+	if f.Type == consts.Bomb && lastFaces.Type != consts.Bomb {
+		return true
 	}
 	if f.Type != lastFaces.Type {
 		return false
 	}
-	return f.Score > lastFaces.Score && f.Main == lastFaces.Main && f.Extra == lastFaces.Extra
+	return f.Score > lastFaces.Score
+}
+
+func (f *Faces) Valid(lastFaces *Faces) bool {
+	if f.Type == consts.KingBomb {
+		return true
+	}
+	if f.Type == consts.Bomb && lastFaces.Type != consts.Bomb {
+		return true
+	}
+	if f.Type != lastFaces.Type || len(f.Keys) != len(lastFaces.Keys) {
+		return false
+	}
+	return f.Score > lastFaces.Score
 }
 
 func ParseFaces(pokers Pokers) *Faces {
-	invalidFaces := &Faces{
-		Type: consts.Invalid,
-	}
+	var (
+		invalidFaces = &Faces{
+			Type: consts.Invalid,
+		}
+		sCount, xCount, score = 0, 0, 0
+		valueCountMap         = map[int]int{}   // 记录牌与张数的关系，牌用的是value <3,3  4,2>,3张3，4张2
+		valueCountGroupMap    = map[int][]int{} // 记录几张的有哪些，<3,[3]  2,[4]>,3张的有3，2张的有4
+		countNums             = make([]int, 0)  // 记录有几种张数 3 2, 有3张的，有2张的
+		values                = make([]int, 0)  // 1 1 1 2 2, 原先的值-2
+	)
 	if len(pokers) == 0 { //33344
 		return invalidFaces
 	}
-	sCount, xCount, score := 0, 0, int64(0)
-	valueCountMap := map[int]int{}        // 记录牌与张数的关系，牌用的是value <3,3  4,2>,3张3，4张2
-	valueCountGroupMap := map[int][]int{} // 记录几张的有哪些，<3,[3]  2,[4]>,3张的有3，2张的有4
-	countNums := make([]int, 0)           // 记录有几种张数 3 2, 有3张的，有2张的
-	values := make([]int, 0)              // 1 1 1 2 2, 原先的值-2
 	for _, poker := range pokers {
 		if poker.Key < 0 || poker.Key > 15 {
 			return invalidFaces
 		}
 		poker.Val = GetValueByKey(poker.Key)
-		score += int64(poker.Val)
 		values = append(values, poker.Val)
 		valueCountMap[poker.Val]++
 		if poker.Key == 14 {
@@ -95,20 +100,24 @@ func ParseFaces(pokers Pokers) *Faces {
 	}
 	for c := range valueCountGroupMap {
 		countNums = append(countNums, c)
-		sort.Ints(valueCountGroupMap[c]) // 对每种张数的排序
+		// 对每种张数的排序
+		sort.Slice(valueCountGroupMap[c], func(i, j int) bool {
+			return valueCountGroupMap[c][i] < valueCountGroupMap[c][j]
+		})
 	}
-	sort.Ints(countNums)
-	for i := 0; i < len(countNums)/2; i++ {
-		countNums[i], countNums[len(countNums)-i-1] = countNums[len(countNums)-i-1], countNums[i]
-	}
+	sort.Slice(countNums, func(i, j int) bool {
+		return countNums[i] > countNums[j]
+	})
 	// 王炸
 	if sCount+xCount == len(pokers) && sCount+xCount == 2 {
 		return &Faces{
 			Values: values,
-			Score:  int64(sCount*14+xCount*15)*2 + int64(len(pokers)*2*1000), // 炸弹计4张，带的计4张
+			Score:  15, // 用大王的Val作为分
 			Type:   consts.KingBomb,
 		}
 	}
+	valueCountGroup := valueCountGroupMap[countNums[0]]
+	score = valueCountGroup[len(valueCountGroup)-1]
 	// 最多的是单牌
 	if countNums[0] == 1 {
 		if len(valueCountGroupMap[countNums[0]]) == 1 {
@@ -123,7 +132,6 @@ func ParseFaces(pokers Pokers) *Faces {
 			return &Faces{
 				Values: values,
 				Score:  score,
-				Main:   len(valueCountGroupMap[countNums[0]]),
 				Type:   consts.SingleStraight,
 			}
 		}
@@ -143,7 +151,6 @@ func ParseFaces(pokers Pokers) *Faces {
 			return &Faces{
 				Values: values,
 				Score:  score,
-				Main:   len(valueCountGroupMap[countNums[0]]),
 				Type:   consts.DoubleStraight,
 			}
 		}
@@ -177,11 +184,9 @@ func ParseFaces(pokers Pokers) *Faces {
 		// 飞机
 		if len(countNums) == 1 && isStraight(valueCountGroupMap[countNums[0]], countNums[0]) {
 			if countNums[0] == 3 {
-				// 只有一种，而且这一种大于3张而且是顺子
 				return &Faces{
 					Values: values,
 					Score:  score,
-					Main:   len(valueCountGroupMap[countNums[0]]),
 					Type:   consts.TripleStraight,
 				}
 			}
@@ -189,11 +194,9 @@ func ParseFaces(pokers Pokers) *Faces {
 		// 飞机带单
 		if len(countNums) == 2 && isStraight(valueCountGroupMap[countNums[0]], countNums[0]) && countNums[1] == 1 && len(valueCountGroupMap[countNums[1]]) == len(valueCountGroupMap[countNums[0]]) {
 			if countNums[0] == 3 {
-				// 只有一种，而且这一种大于3张而且是顺子
 				return &Faces{
 					Values: values,
 					Score:  score,
-					Main:   len(valueCountGroupMap[countNums[0]]),
 					Type:   consts.TripleStraightSingle,
 				}
 			}
@@ -201,11 +204,9 @@ func ParseFaces(pokers Pokers) *Faces {
 		// 飞机带对
 		if len(countNums) == 2 && isStraight(valueCountGroupMap[countNums[0]], countNums[0]) && countNums[1] == 2 && len(valueCountGroupMap[countNums[1]]) == len(valueCountGroupMap[countNums[0]]) {
 			if countNums[0] == 3 {
-				// 只有一种，而且这一种大于3张而且是顺子
 				return &Faces{
 					Values: values,
 					Score:  score,
-					Main:   len(valueCountGroupMap[countNums[0]]),
 					Type:   consts.TripleStraightDouble,
 				}
 			}
@@ -226,9 +227,7 @@ func ParseFaces(pokers Pokers) *Faces {
 		if len(countNums) == 2 && len(valueCountGroupMap[countNums[0]]) == 1 && (countNums[1] == 1 && len(valueCountGroupMap[countNums[1]]) == 2) {
 			return &Faces{
 				Values: values,
-				Score:  int64(valueCountGroupMap[countNums[0]][0] * countNums[0]),
-				Main:   len(valueCountGroupMap[countNums[0]]),
-				Extra:  countNums[1],
+				Score:  score,
 				Type:   consts.QuarterWithTwoSingle,
 			}
 		}
@@ -236,9 +235,7 @@ func ParseFaces(pokers Pokers) *Faces {
 		if len(countNums) == 2 && len(valueCountGroupMap[countNums[0]]) == 1 && (countNums[1] == 2 && len(valueCountGroupMap[countNums[1]]) == 2) {
 			return &Faces{
 				Values: values,
-				Score:  int64(valueCountGroupMap[countNums[0]][0] * countNums[0]),
-				Main:   len(valueCountGroupMap[countNums[0]]),
-				Extra:  countNums[1],
+				Score:  score,
 				Type:   consts.QuarterWithTwoDouble,
 			}
 		}

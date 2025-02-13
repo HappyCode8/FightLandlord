@@ -8,6 +8,7 @@ import (
 	"server/database"
 	"server/errdef"
 	"server/model"
+	"slices"
 	"strings"
 	"time"
 )
@@ -90,15 +91,23 @@ func handlePlay(player *database.Player, game *database.Game) error {
 	return playing(player, game)
 }
 
+// todo: 需要加个master参数控制
 func playing(player *database.Player, game *database.Game) error {
 	timeout := game.PlayTimeOut[player.ID]
 	for {
-		buf := bytes.Buffer{}
-		buf.WriteString("\n")
-		buf.WriteString(fmt.Sprintf("Timeout: %ds, pokers: %s\n", int(timeout.Seconds()), game.Pokers[player.ID].String()))
-		_ = player.WriteString(buf.String())
-		before := time.Now().Unix()
-		pokers := game.Pokers[player.ID]
+		var (
+			before            = time.Now().Unix()      // 进入时间打点，便于计算超时
+			reservePokers     = game.Pokers[player.ID] // 持有的牌
+			reservePokersMap  = map[int]model.Pokers{} // 手中的牌map <3,33 5,555>样式
+			reservePokersKeys = make([]int, 0)         // 手中的牌keys
+			sellPokers        = make(model.Pokers, 0)  // 出的牌
+			inValid           bool                     // 出的牌是否合法
+			remainPokers      = make(model.Pokers, 0)  // 出完以后手中剩下的牌
+			sellFaces         *model.Faces             // 出的牌牌型解析
+			lastFaces         *model.Faces             // 上家出的牌牌型解析
+		)
+		_ = player.WriteString(fmt.Sprintf("Timeout: %ds, reservePokers: %s\n", int(timeout.Seconds()), reservePokers.String()))
+		// 请求用户出牌信息
 		ans, err := player.AskForString(timeout)
 		if err != nil {
 			ans = "pass"
@@ -110,36 +119,58 @@ func playing(player *database.Player, game *database.Game) error {
 			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
 			continue
 		} else if ans == "pass" {
+			// 过的话轮到下一个
 			nextPlayer := database.GetPlayer(game.NextPlayer(player.ID))
 			database.Broadcast(player.RoomID, fmt.Sprintf("%s passed, next %s\n", player.Name, nextPlayer.Name))
 			game.States[nextPlayer.ID] <- statePlay
 			return nil
 		}
-		normalPokers := map[int]model.Pokers{} //<3,33 5,555>样式
-		for _, v := range pokers {
-			normalPokers[v.Key] = append(normalPokers[v.Key], v)
+		for _, v := range reservePokers {
+			reservePokersMap[v.Key] = append(reservePokersMap[v.Key], v)
+			reservePokersKeys = append(reservePokersKeys, v.Key)
 		}
-		// todo: 1. 需要判断出的牌是否符合规则 2. 需要判断出的牌是否比上家的大
-		sells := make(model.Pokers, 0) // 要出的
+
 		for _, alias := range ans {
 			key := model.GetKey(string(alias))
-			sells = append(sells, normalPokers[key][len(normalPokers[key])-1]) // 出的牌，从normalPokers取最后一张
-			normalPokers[key] = normalPokers[key][:len(normalPokers[key])-1]   // 剩的牌，从normalPokers取前几张
+			if !slices.Contains(reservePokersKeys, key) {
+				inValid = true
+				break
+			}
+			sellPokers = append(sellPokers, reservePokersMap[key][len(reservePokersMap[key])-1]) // 出的牌，从normalPokers取最后一张
+			reservePokersMap[key] = reservePokersMap[key][:len(reservePokersMap[key])-1]         // 剩的牌，从normalPokers取前几张
 		}
-		if model.ParseFaces(sells).Type == consts.Invalid {
+		sellFaces = model.ParseFaces(sellPokers)
+		lastFaces = game.LastFaces
+		// 出的牌型不合法
+		if sellFaces.Type == consts.Invalid {
 			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
 			continue
 		}
-		// 刷新剩下的牌
-		pokers = make(model.Pokers, 0)
-		for _, curr := range normalPokers {
-			pokers = append(pokers, curr...)
+		// 出的牌不在手里
+		if inValid {
+			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
+			continue
 		}
-		game.Pokers[player.ID] = pokers
+		// 出的牌跟上家不一样或者没有上家的大
+		if lastFaces != nil && !sellFaces.Valid(lastFaces) {
+			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
+			continue
+		}
+		// 出的牌跟没有上家的大
+		if lastFaces != nil && !sellFaces.MaxThan(lastFaces) {
+			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
+			continue
+		}
+
+		for _, curr := range reservePokersMap {
+			remainPokers = append(remainPokers, curr...)
+		}
+		game.Pokers[player.ID] = remainPokers
 		game.LastPlayer = player.ID
-		// 出完牌以后，重新初始化房间的信息
-		if len(pokers) == 0 {
-			database.Broadcast(player.RoomID, fmt.Sprintf("%s played %s, won the game! \n", player.Name, sells.String()))
+		game.LastFaces = sellFaces
+		// 出完牌以后，刷新房间信息
+		if len(reservePokers) == 0 {
+			database.Broadcast(player.RoomID, fmt.Sprintf("%s played %s, won the game! \n", player.Name, sellPokers.String()))
 			room := database.GetRoom(player.RoomID)
 			if room != nil {
 				room.Game = nil
@@ -158,7 +189,7 @@ func playing(player *database.Player, game *database.Game) error {
 		}
 		// 给全局进行广播
 		nextPlayer := database.GetPlayer(game.NextPlayer(player.ID))
-		database.Broadcast(player.RoomID, fmt.Sprintf("%s played %s, next %s\n", player.Name, sells.String(), nextPlayer.Name))
+		database.Broadcast(player.RoomID, fmt.Sprintf("%s played %s, next %s\n", player.Name, sellPokers.String(), nextPlayer.Name))
 		game.States[nextPlayer.ID] <- statePlay
 		return nil
 	}

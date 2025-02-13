@@ -14,6 +14,7 @@ type Game struct {
 	FirstPlayer int64                   `json:"firstPlayer"` // 第一个出牌的人
 	LastPlayer  int64                   `json:"lastPlayer"`  // 最后一个出牌的人
 	PlayTimeOut map[int64]time.Duration `json:"playTimeOut"` // 超时时间
+	LastFaces   *model.Faces            `json:"lastFaces"`   // 最后出的牌
 }
 
 func (game *Game) Clean() {

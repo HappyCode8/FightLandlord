@@ -55,6 +55,7 @@ func TestParseFaces(t *testing.T) {
 	assert.Equal(t, consts.TripleStraightSingle, ParseFaces(getPokers(9, 9, 9, 8, 8, 8, 7, 7, 7, 11, 1, 15)).Type)
 	assert.Equal(t, consts.TripleStraightDouble, ParseFaces(getPokers(3, 3, 3, 4, 4, 4, 5, 5, 6, 6)).Type)
 
+	assert.Equal(t, consts.Invalid, ParseFaces(getPokers(3, 3, 4, 4, 6, 6)).Type)
 	assert.Equal(t, consts.Invalid, ParseFaces(getPokers(2, 3, 4, 5, 6, 7)).Type)
 	assert.Equal(t, consts.Invalid, ParseFaces(getPokers(10, 11, 12, 13, 1, 2)).Type)
 	assert.Equal(t, consts.Invalid, ParseFaces(getPokers(3, 3, 3, 3, 4, 4, 4, 4)).Type)
@@ -83,4 +84,25 @@ func TestParseFaces(t *testing.T) {
 	assert.Equal(t, consts.Invalid, ParseFaces(getPokers(3, 3, 3, 3, 3, 4, 4, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9, 9, 9)).Type)
 	assert.Equal(t, consts.Invalid, ParseFaces(getPokers(3, 3, 3, 4, 4, 5)).Type)
 	assert.Equal(t, consts.Invalid, ParseFaces(getPokers(3, 3, 3, 3, 4)).Type)
+}
+
+func TestMaxThan(t *testing.T) {
+	assert.Equal(t, true, ParseFaces(getPokers(2)).MaxThan(ParseFaces(getPokers(3))))
+	assert.Equal(t, false, ParseFaces(getPokers(3)).MaxThan(ParseFaces(getPokers(2))))
+	assert.Equal(t, true, ParseFaces(getPokers(4, 5, 6, 7, 8)).MaxThan(ParseFaces(getPokers(3, 4, 5, 6, 7))))
+	assert.Equal(t, false, ParseFaces(getPokers(4, 5, 6, 7, 8)).MaxThan(ParseFaces(getPokers(5, 6, 7, 8, 9))))
+
+	assert.Equal(t, true, ParseFaces(getPokers(4, 4)).MaxThan(ParseFaces(getPokers(3, 3))))
+	assert.Equal(t, false, ParseFaces(getPokers(3, 3)).MaxThan(ParseFaces(getPokers(4, 4))))
+	assert.Equal(t, true, ParseFaces(getPokers(4, 4, 5, 5, 6, 6)).MaxThan(ParseFaces(getPokers(3, 3, 4, 4, 5, 5))))
+	assert.Equal(t, false, ParseFaces(getPokers(3, 3, 4, 4, 5, 5)).MaxThan(ParseFaces(getPokers(4, 4, 5, 5, 6, 6))))
+
+	assert.Equal(t, true, ParseFaces(getPokers(4, 4, 4)).MaxThan(ParseFaces(getPokers(3, 3, 3))))
+	assert.Equal(t, false, ParseFaces(getPokers(3, 3, 3)).MaxThan(ParseFaces(getPokers(4, 4, 4))))
+	assert.Equal(t, true, ParseFaces(getPokers(4, 4, 4, 2)).MaxThan(ParseFaces(getPokers(3, 3, 3, 1))))
+	assert.Equal(t, false, ParseFaces(getPokers(3, 3, 3, 1)).MaxThan(ParseFaces(getPokers(4, 4, 4, 2))))
+	assert.Equal(t, true, ParseFaces(getPokers(4, 4, 4, 2, 2)).MaxThan(ParseFaces(getPokers(3, 3, 3, 1, 1))))
+	assert.Equal(t, false, ParseFaces(getPokers(3, 3, 3, 1, 1)).MaxThan(ParseFaces(getPokers(4, 4, 4, 2, 1))))
+	assert.Equal(t, true, ParseFaces(getPokers(5, 5, 5, 4, 4, 4)).MaxThan(ParseFaces(getPokers(4, 4, 4, 3, 3, 3))))
+	assert.Equal(t, false, ParseFaces(getPokers(4, 4, 4, 3, 3, 3)).MaxThan(ParseFaces(getPokers(5, 5, 5, 4, 4, 4))))
 }
