@@ -122,9 +122,8 @@ func deleteRoom(room *Room) {
 
 func broadcast(room *Room, msg string) {
 	room.ActiveTime = time.Now()
-	excludeSet := map[int64]bool{}
 	for playerId := range getRoomPlayers(room.ID) {
-		if player := getPlayer(playerId); player != nil && !excludeSet[playerId] {
+		if player := getPlayer(playerId); player != nil {
 			_ = player.WriteString(">> " + msg)
 		}
 	}

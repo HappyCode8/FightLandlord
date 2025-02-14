@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"net"
 	"server/consts"
 	"strconv"
 	"sync/atomic"
@@ -15,10 +14,10 @@ var connId int64
 type Conn struct {
 	id    int64
 	state int
-	conn  net.Conn
+	conn  ReadWriteCloser
 }
 
-func Wrapper(conn net.Conn) *Conn {
+func Wrapper(conn ReadWriteCloser) *Conn {
 	return &Conn{
 		id:   atomic.AddInt64(&connId, 1),
 		conn: conn,
@@ -30,7 +29,7 @@ func (c *Conn) ID() int64 {
 }
 
 func (c *Conn) IP() string {
-	return c.conn.RemoteAddr().String()
+	return c.conn.IP()
 }
 
 func (c *Conn) Close() error {
@@ -43,12 +42,18 @@ func (c *Conn) State() int {
 }
 
 func (c *Conn) Write(packet Packet) error {
-	_, err := c.conn.Write(encode(packet))
-	return err
+	return c.conn.Write(packet)
 }
 
 func (c *Conn) Read() (*Packet, error) {
-	return decode(c.conn)
+	return c.conn.Read()
+}
+
+type ReadWriteCloser interface {
+	Read() (*Packet, error)
+	Write(msg Packet) error
+	Close() error
+	IP() string
 }
 
 func readUint32(reader io.Reader) (uint32, error) {

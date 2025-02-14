@@ -20,7 +20,7 @@ type Room struct {
 
 func roomCancel(room *Room) {
 	if room.ActiveTime.Add(24 * time.Hour).Before(time.Now()) {
-		log.Println("room %d is timeout 24 hours, removed.\n", room.ID)
+		log.Printf("room %d is timeout 24 hours, removed.\n", room.ID)
 		deleteRoom(room)
 		return
 	}
@@ -33,7 +33,7 @@ func roomCancel(room *Room) {
 		}
 	}
 	if !living {
-		log.Println("room %d is not living, removed.\n", room.ID)
+		log.Printf("room %d is not living, removed.\n", room.ID)
 		deleteRoom(room)
 	}
 }

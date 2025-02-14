@@ -15,7 +15,7 @@ var (
 
 func init() {
 	flag.StringVar(&host, "h", "127.0.0.1", "host")
-	flag.IntVar(&port, "p", 9999, "port")
+	flag.IntVar(&port, "p", 9998, "port")
 	flag.StringVar(&name, "n", "", "name")
 	flag.Parse()
 }

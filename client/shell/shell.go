@@ -4,6 +4,7 @@ import (
 	"client/model"
 	"client/util"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -23,11 +24,15 @@ func New(addr, name string) *shell {
 func (s *shell) Start() error {
 	name := util.RandomName()
 	s.ctx = model.NewContext(
-		time.Now().UnixNano(),
-		name,
+		time.Now().UnixNano(), //userid
+		name,                  //username
 	)
 	// 建立一个连接
-	err := s.ctx.Connect(s.addr)
+	net := "tcp"
+	if strings.HasSuffix(s.addr, "9998") {
+		net = "ws"
+	}
+	err := s.ctx.Connect(net, s.addr)
 	if err != nil {
 		log.Println(err)
 		return err

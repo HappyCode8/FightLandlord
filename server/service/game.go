@@ -66,10 +66,8 @@ func (g *Game) Next(player *database.Player) (consts.StateID, error) {
 		state := <-game.States[player.ID]
 		switch state {
 		case stateRob:
-			// 没有完全实现，随机取一个作为地主
 			handleRob(player, game)
 		case statePlay:
-			// 没有完全实现，只实现了把一个人出的牌全局广播
 			err := handlePlay(player, game)
 			if err != nil {
 				return 0, err
@@ -91,7 +89,6 @@ func handlePlay(player *database.Player, game *database.Game) error {
 	return playing(player, game)
 }
 
-// todo: 需要加个master参数控制
 func playing(player *database.Player, game *database.Game) error {
 	timeout := game.PlayTimeOut[player.ID]
 	for {
@@ -141,23 +138,13 @@ func playing(player *database.Player, game *database.Game) error {
 		}
 		sellFaces = model.ParseFaces(sellPokers)
 		lastFaces = game.LastFaces
-		// 出的牌型不合法
-		if sellFaces.Type == consts.Invalid {
+		// 出的牌型不合法或者出的牌不在手里
+		if sellFaces.Type == consts.Invalid || inValid {
 			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
 			continue
 		}
-		// 出的牌不在手里
-		if inValid {
-			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
-			continue
-		}
-		// 出的牌跟上家不一样或者没有上家的大
-		if lastFaces != nil && !sellFaces.Valid(lastFaces) {
-			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
-			continue
-		}
-		// 出的牌跟没有上家的大
-		if lastFaces != nil && !sellFaces.MaxThan(lastFaces) {
+		// 出的牌型跟上家不一样或者没有上家的大，但是上次出牌的是自己的除外
+		if game.LastPlayer != player.ID && lastFaces != nil && (!sellFaces.Valid(lastFaces) || !sellFaces.MaxThan(lastFaces)) {
 			_ = player.WriteString(fmt.Sprintf("%s\n", errdef.ErrorsPokersFacesInvalid.Error()))
 			continue
 		}
@@ -169,7 +156,7 @@ func playing(player *database.Player, game *database.Game) error {
 		game.LastPlayer = player.ID
 		game.LastFaces = sellFaces
 		// 出完牌以后，刷新房间信息
-		if len(reservePokers) == 0 {
+		if len(remainPokers) == 0 {
 			database.Broadcast(player.RoomID, fmt.Sprintf("%s played %s, won the game! \n", player.Name, sellPokers.String()))
 			room := database.GetRoom(player.RoomID)
 			if room != nil {

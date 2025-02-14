@@ -6,8 +6,10 @@ import (
 	"client/util"
 	"errors"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"log"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 )
@@ -22,6 +24,13 @@ type Context struct {
 	conn *protocol.Conn
 }
 
+type netConnector func(addr string) (*protocol.Conn, error)
+
+var netConnectors = map[string]netConnector{
+	"tcp": tcpConnect,
+	"ws":  websocketConnect,
+}
+
 func NewContext(userId int64, userName string) *Context {
 	return &Context{
 		id:   userId,
@@ -29,17 +38,16 @@ func NewContext(userId int64, userName string) *Context {
 	}
 }
 
-func (c *Context) Connect(addr string) error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return errors.New(fmt.Sprintf("tcp server error: %v", err))
+func (c *Context) Connect(net string, addr string) error {
+	if connector, ok := netConnectors[net]; ok {
+		conn, err := connector(addr)
+		if err != nil {
+			return err
+		}
+		c.conn = conn
+		return nil
 	}
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
-	if err != nil {
-		return errors.New(fmt.Sprintf("tcp server error: %v", err))
-	}
-	c.conn = protocol.Wrapper(conn)
-	return nil
+	return errors.New(fmt.Sprintf("unsupported net type: %s", net))
 }
 
 func (c *Context) Auth() error {
@@ -50,7 +58,7 @@ func (c *Context) Auth() error {
 }
 
 func (c *Context) Listener() error {
-	is := false
+	inputIsValid := false // 用来控制是向下游求包还是展示信息
 	// 这个异步任务的作用是接收输入然后往conn里面写，传给服务器
 	util.Async(func() {
 		for {
@@ -59,8 +67,7 @@ func (c *Context) Listener() error {
 			if err != nil {
 				log.Panic(err)
 			}
-			if !is {
-				//log.Println("debug发送:进入了!is")
+			if !inputIsValid {
 				continue
 			}
 			c.print(fmt.Sprintf(cleanLine+"[%s@ratel %s]# ", strings.TrimSpace(strings.ToLower(c.name)), "~"))
@@ -76,26 +83,22 @@ func (c *Context) Listener() error {
 	return c.conn.Accept(func(packet protocol.Packet, conn *protocol.Conn) {
 		data := string(packet.Body)
 		if data == consts.IsStart {
-			//log.Println("debug接收: 接收到了服务器的开始信息")
-			if !is {
+			if !inputIsValid {
 				c.print(fmt.Sprintf(cleanLine+"[%s@ratel %s]# ", strings.TrimSpace(strings.ToLower(c.name)), "~"))
 			}
-			is = true
+			inputIsValid = true
 			return
 		} else if data == consts.IsStop {
-			//log.Println("debug接收: 接收到了服务器的结束信息")
-			if is {
+			if inputIsValid {
 				c.print(cleanLine)
 			}
-			is = false
+			inputIsValid = false
 			return
 		}
-		if is {
-			//log.Println("debug接收:进入了is")
+		// 求包的时候展示输入信息，否则展示服务器信息
+		if inputIsValid {
 			c.print(cleanLine + data + fmt.Sprintf(cleanLine+"[%s@ratel %s]# ", strings.TrimSpace(strings.ToLower(c.name)), "~"))
 		} else {
-			//log.Println("debug接收:进入了is else")
-			// 还没开始的时候服务器返回的信息，直接打印
 			c.print(data)
 		}
 	})
@@ -105,4 +108,25 @@ func (c *Context) print(str string) {
 	c.Lock()
 	defer c.Unlock()
 	fmt.Print(str)
+}
+
+func tcpConnect(addr string) (*protocol.Conn, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("tcp server error: %v", err))
+	}
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("tcp server error: %v", err))
+	}
+	return protocol.Wrapper(protocol.NewTcpReadWriteCloser(conn)), nil
+}
+
+func websocketConnect(addr string) (*protocol.Conn, error) {
+	u := url.URL{Scheme: "ws", Host: addr, Path: "/ws"}
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("ws server error: %v", err))
+	}
+	return protocol.Wrapper(protocol.NewWebsocketReadWriteCloser(conn)), nil
 }

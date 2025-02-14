@@ -2,7 +2,6 @@ package handler
 
 import (
 	"log"
-	"net"
 	"server/database"
 	"server/errdef"
 	"server/model"
@@ -12,39 +11,8 @@ import (
 	"time"
 )
 
-type Tcp struct {
-	addr string
-}
-
-func NewTcpServer(addr string) Tcp {
-	return Tcp{addr: addr}
-}
-
-func (t Tcp) Serve() error {
-	listener, err := net.Listen("tcp", t.addr)
-	if err != nil {
-		return err
-	}
-	log.Println("tcp server listening on", t.addr)
-	for {
-		// 监听连接
-		conn, acceptErr := listener.Accept()
-		if acceptErr != nil {
-			log.Println("listener.Accept err", err)
-			continue
-		}
-		// 每有一个连接，就处理
-		util.Async(func() {
-			handleErr := handle(conn)
-			if handleErr != nil {
-				log.Println("handle err", handleErr)
-			}
-		})
-	}
-}
-
 // func handle(rwc protocol.ReadWriteCloser) error {
-func handle(conn net.Conn) error {
+func handle(conn protocol.ReadWriteCloser) error {
 	// 给新进入的用户分配资源，一个id对应一个conn
 	c := protocol.Wrapper(conn)
 	defer func() {
